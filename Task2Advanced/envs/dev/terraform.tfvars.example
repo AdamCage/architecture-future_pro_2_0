@@ -1,0 +1,14 @@
+cloud_id  = "your-cloud-id"
+folder_id = "your-folder-id"
+vm_name   = "dev-vm"
+cores     = 2
+memory    = 4
+disk_size = 20
+subnet_id = "your-subnet-id"
+ssh_key   = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC..."
+zone      = "ru-central1-a"
+
+labels = {
+  environment = "dev"
+  project     = "future-2-0"
+}

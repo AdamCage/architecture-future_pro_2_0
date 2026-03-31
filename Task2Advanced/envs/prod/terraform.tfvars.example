@@ -1,0 +1,14 @@
+cloud_id  = "your-cloud-id"
+folder_id = "your-folder-id"
+vm_name   = "prod-vm"
+cores     = 8
+memory    = 16
+disk_size = 100
+subnet_id = "your-subnet-id"
+ssh_key   = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC..."
+zone      = "ru-central1-a"
+
+labels = {
+  environment = "prod"
+  project     = "future-2-0"
+}

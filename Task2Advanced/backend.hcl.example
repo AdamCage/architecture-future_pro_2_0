@@ -1,0 +1,9 @@
+# Пример конфигурации backend для локального использования
+# Скопируйте этот файл в backend.hcl и заполните значениями
+
+access_key = "your-s3-access-key"
+secret_key = "your-s3-secret-key"
+endpoint   = "storage.yandexcloud.net"
+bucket     = "terraform-state-bucket"
+region     = "ru-central1"
+key        = "dev/terraform.tfstate" # Измените для stage/prod
