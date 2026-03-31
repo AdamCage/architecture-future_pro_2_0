@@ -1,0 +1,162 @@
+name: Terraform CI/CD
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'Task2Advanced/**'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'Task2Advanced/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Окружение для развёртывания'
+        required: true
+        type: choice
+        options:
+          - dev
+          - stage
+          - prod
+      action:
+        description: 'Действие'
+        required: true
+        type: choice
+        options:
+          - plan
+          - apply
+
+env:
+  TF_VERSION: "1.6.0"
+
+jobs:
+  terraform-plan:
+    name: Terraform Plan - ${{ matrix.environment }}
+    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.action == 'plan'
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', github.event.inputs.environment)) || ['dev', 'stage', 'prod'] }}
+    defaults:
+      run:
+        working-directory: Task2Advanced/envs/${{ matrix.environment }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure Yandex Cloud credentials
+        run: |
+          mkdir -p ~/.config/yandex
+          echo "${{ secrets.YC_SERVICE_ACCOUNT_KEY }}" > ~/.config/yandex/key.json
+
+      - name: Terraform Init
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_KEY }}
+        run: |
+          terraform init \
+            -backend-config="access_key=${{ secrets.S3_ACCESS_KEY }}" \
+            -backend-config="secret_key=${{ secrets.S3_SECRET_KEY }}"
+
+      - name: Terraform Format Check
+        run: terraform fmt -check
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        id: plan
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_KEY }}
+        run: |
+          terraform plan \
+            -var="cloud_id=${{ secrets.YC_CLOUD_ID }}" \
+            -var="folder_id=${{ secrets.YC_FOLDER_ID }}" \
+            -var="vm_name=${{ vars.VM_NAME || format('%s-vm', matrix.environment) }}" \
+            -var="cores=${{ vars.VM_CORES || '2' }}" \
+            -var="memory=${{ vars.VM_MEMORY || '4' }}" \
+            -var="disk_size=${{ vars.VM_DISK_SIZE || '20' }}" \
+            -var="subnet_id=${{ vars.SUBNET_ID }}" \
+            -var="ssh_key=${{ secrets.SSH_KEY }}" \
+            -out=tfplan
+        continue-on-error: true
+
+      - name: Comment Plan
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const output = `#### Terraform Plan для ${{ matrix.environment }} 📖
+            Планирование выполнено. Проверьте логи для деталей.
+            *Окружение: \`${{ matrix.environment }}\`, Pusher: @${{ github.actor }}*`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            })
+
+      - name: Terraform Plan Status
+        if: steps.plan.outcome == 'failure'
+        run: exit 1
+
+  terraform-apply:
+    name: Terraform Apply - ${{ github.event.inputs.environment }}
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply'
+    defaults:
+      run:
+        working-directory: Task2Advanced/envs/${{ github.event.inputs.environment }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure Yandex Cloud credentials
+        run: |
+          mkdir -p ~/.config/yandex
+          echo "${{ secrets.YC_SERVICE_ACCOUNT_KEY }}" > ~/.config/yandex/key.json
+
+      - name: Terraform Init
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_KEY }}
+        run: |
+          terraform init \
+            -backend-config="access_key=${{ secrets.S3_ACCESS_KEY }}" \
+            -backend-config="secret_key=${{ secrets.S3_SECRET_KEY }}"
+
+      - name: Terraform Apply
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_KEY }}
+        run: |
+          terraform apply \
+            -var="cloud_id=${{ secrets.YC_CLOUD_ID }}" \
+            -var="folder_id=${{ secrets.YC_FOLDER_ID }}" \
+            -var="vm_name=${{ vars.VM_NAME || format('%s-vm', github.event.inputs.environment) }}" \
+            -var="cores=${{ vars.VM_CORES || '2' }}" \
+            -var="memory=${{ vars.VM_MEMORY || '4' }}" \
+            -var="disk_size=${{ vars.VM_DISK_SIZE || '20' }}" \
+            -var="subnet_id=${{ vars.SUBNET_ID }}" \
+            -var="ssh_key=${{ secrets.SSH_KEY }}" \
+            -auto-approve

@@ -1,0 +1,14 @@
+cloud_id  = "your-cloud-id"
+folder_id = "your-folder-id"
+vm_name   = "stage-vm"
+cores     = 4
+memory    = 8
+disk_size = 50
+subnet_id = "your-subnet-id"
+ssh_key   = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC..."
+zone      = "ru-central1-a"
+
+labels = {
+  environment = "stage"
+  project     = "future-2-0"
+}
